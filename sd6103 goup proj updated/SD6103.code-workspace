@@ -1,0 +1,26 @@
+{
+  "folders": [
+    {
+      "name": "SD6103 Data Systems Project",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "C:\\Users\\BUDINGLIN\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+    "python.analysis.extraPaths": ["${workspaceFolder}/scripts", "${workspaceFolder}/report"],
+    "files.associations": {
+      "*.sql": "sql",
+      "*.tex": "latex"
+    },
+    "sqltools.useNodeRuntime": true
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "mtxr.sqltools",
+      "mtxr.sqltools-driver-pg",
+      "james-yu.latex-workshop"
+    ]
+  }
+}

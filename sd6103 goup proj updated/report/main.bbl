@@ -1,0 +1,46 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citename{Elmasri and Navathe, }2016]{elmasri2016fundamentals}
+Ramez Elmasri and Shamkant~B. Navathe.
+\newblock {\em Fundamentals of Database Systems}.
+\newblock Pearson, 7th edition, 2016.
+
+\bibitem[\protect\citename{{Housing and Development Board},
+  }2026]{datagov_resale}
+{Housing and Development Board}.
+\newblock Resale flat prices.
+\newblock Singapore Government Open Data Portal, 2026.
+\newblock Accessed 28 August 2026.
+
+\bibitem[\protect\citename{Lan \bgroup \em et al.\egroup , }2022]{lan2022site}
+Tian Lan, Hao Cheng, Yi~Wang, and Bihan Wen.
+\newblock Site selection via learning graph convolutional neural networks: A
+  case study of singapore.
+\newblock {\em Remote Sensing}, 14(15):3579, 2022.
+
+\bibitem[\protect\citename{{Nanyang Technological University},
+  }2026a]{ntu2026er}
+{Nanyang Technological University}.
+\newblock Sd6103 data systems: Entity--relationship model.
+\newblock Course lecture slides, Week 3, 2026.
+
+\bibitem[\protect\citename{{Nanyang Technological University},
+  }2026b]{ntu2026relational}
+{Nanyang Technological University}.
+\newblock Sd6103 data systems: Relational model.
+\newblock Course lecture slides, Week 4, 2026.
+
+\bibitem[\protect\citename{{PostgreSQL Global Development Group},
+  }2026]{postgresql2026}
+{PostgreSQL Global Development Group}.
+\newblock Postgresql 18 documentation.
+\newblock Online documentation, 2026.
+\newblock Accessed 28 August 2026.
+
+\bibitem[\protect\citename{{Singapore Food Agency}, }2026]{datagov_hawker}
+{Singapore Food Agency}.
+\newblock List of government markets and hawker centres.
+\newblock Singapore Government Open Data Portal, 2026.
+\newblock Accessed 28 August 2026.
+
+\end{thebibliography}

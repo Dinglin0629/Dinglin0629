@@ -1,0 +1,34 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {section}{\numberline {2}Task 1: Conceptual and Logical Design}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Proximity definition}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Conceptual ER model}{3}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Synthesis of the candidate ERM designs}{3}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Relational schema and normalization}{6}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Task 2: Data Acquisition and Population}{6}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Sources and reproducibility}{6}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Transformations}{7}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Loading issues and resolutions}{7}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Task 3: Queries and Results}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Derived proximity view and data scope}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Q1: Price per square metre across towns}{8}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Q2: Remaining lease and transaction price}{9}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Q3: Towns with large 3-room flats}{10}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Q4: Hawker-centre proximity effect}{12}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Q5: Prices near hawkers with fresh-market stalls}{13}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Q6: All-relation join}{15}{subsection.4.7}%
+\contentsline {subsection}{\numberline {4.8}Merged-code performance measurements}{16}{subsection.4.8}%
+\contentsline {subsection}{\numberline {4.9}Integration and correctness checks}{17}{subsection.4.9}%
+\contentsline {section}{\numberline {5}Task 4: Index Design and Experimental Evaluation}{17}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Objective and controlled protocol}{17}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Plan-driven candidate design}{18}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Selection rule and confirmed index bundle}{18}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}What the execution plans establish}{20}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Deliverables and reproduction}{21}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}References and provenance}{21}{subsection.5.6}%
+\contentsline {section}{\numberline {6}Limitations and Conclusion}{21}{section.6}%
+\contentsline {section}{\numberline {A}Database Creation SQL}{22}{appendix.A}%
+\contentsline {section}{\numberline {B}Data Loading SQL}{23}{appendix.B}%
+\contentsline {section}{\numberline {C}Analytical Queries}{24}{appendix.C}%
+\contentsline {section}{\numberline {D}Index Statements}{26}{appendix.D}%
+\contentsline {section}{\numberline {E}Benchmark SQL}{26}{appendix.E}%
+\contentsline {section}{\numberline {F}Reproducibility Commands}{28}{appendix.F}%

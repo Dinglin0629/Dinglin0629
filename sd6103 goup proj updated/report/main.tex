@@ -1,0 +1,301 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=25mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric}
+\usepackage{listings}
+\usepackage{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{caption}
+\newcommand{\Needspace}[1]{}
+
+\definecolor{ntuBlue}{HTML}{003B5C}
+\definecolor{softBlue}{HTML}{E8F2F7}
+\definecolor{sqlGray}{HTML}{F5F5F5}
+\hypersetup{colorlinks=true,linkcolor=ntuBlue,citecolor=ntuBlue,urlcolor=ntuBlue}
+\pagestyle{fancy}\fancyhf{}\lhead{SD6103 Data Systems Project}\rhead{Project Report}\cfoot{\thepage}
+\setlength{\headheight}{14pt}
+\setlist{nosep}
+\lstset{language=SQL,basicstyle=\ttfamily\scriptsize,backgroundcolor=\color{sqlGray},
+  frame=single,breaklines=true,showstringspaces=false,columns=fullflexible,
+  keywordstyle=\color{ntuBlue}\bfseries,commentstyle=\color{gray}}
+
+\title{\textbf{A PostgreSQL Backend for Analysing Singapore HDB Resale Prices and Hawker-Centre Accessibility}}
+\author{Group Name: \textit{Transcend Self}\\
+\small Group Members (alphabetical order):\\
+\small BU DINGLIN, CHEN JIZHOU, HUANG HUI,\\
+\small YUAN JIAYI, ZHONG GUOFENG, ZHOU SHUHAN}
+\date{Academic Year 2026/27, Semester 1}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This project develops a normalized PostgreSQL database linking HDB resale
+transactions to nearby hawker centres. The reproducible pipeline combines 2023--2025
+resale records, current HDB coordinates, official hawker attributes, and supplied hawker
+coordinates. After validation and matching, the database-ready instance contains 26 towns,
+9,385 HDB blocks, 78,670 transactions, 129 hawker centres, and 40,354 proximity links.
+We define three great-circle-distance bands and provide six analytical SQL queries plus
+candidate indexes. The complete schema, processed data, and all six analytical queries
+were executed successfully in PostgreSQL 18 through pgAdmin. The final all-table query
+returned 154 groups, matching the independent CSV cross-check.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Public housing and hawker centres are important parts of Singapore's social infrastructure.
+The project asks whether housing attributes, remaining lease, town, and accessibility to
+affordable food are associated with resale prices. We use official HDB transaction data
+\citep{datagov_resale}, official market and hawker attributes \citep{datagov_hawker}, and
+the geolocated HDB dataset described by \citet{lan2022site}. The implementation follows
+relational normalization and integrity principles \citep{elmasri2016fundamentals}.
+
+\section{Task 1: Conceptual and Logical Design}
+\subsection{Proximity definition}
+We use haversine great-circle distance between the latitude/longitude of an HDB block and
+a hawker centre. The three mutually exclusive bands are: \emph{near}, $[0,500)$ m;
+\emph{medium}, $[500,1000)$ m; and \emph{far}, $[1000,2000]$ m. Links beyond 2 km are
+not stored because they do not represent useful local access. The exact distance is stored;
+its band is derived from a reference relation, avoiding two stored facts that can disagree.
+This choice is reproducible, requires no proprietary
+routing API, and is consistent with the coordinate datasets, although it approximates
+walking accessibility.
+
+\subsection{Conceptual ER model}
+Figure~\ref{fig:er} follows the min--max convention taught in the
+SD6103 lectures \citep{ntu2026er}: rectangles are entity types, diamonds are relationship types, ellipses
+are attributes, underlining denotes keys, and a dashed ellipse denotes a derived
+attribute. The final model follows the assignment terminology \textbf{HDB\_FLAT}, while
+defining its data-supported grain explicitly: one geocoded block--street address, not an
+individual dwelling unit. Thus \texttt{flat\_id} identifies a block-address record.
+Introducing a second unit-level entity would invent identities absent from the sources.
+Flat type, storey range, floor area, model, lease and price instead describe a resale
+transaction observation.
+
+A town may contain zero or many blocks, while every block belongs to exactly one town.
+A flat record may have zero or many resale transactions, while every transaction belongs
+to exactly one flat record through \emph{has\_sale}. The \emph{nearby} relationship is
+M:N. Its \texttt{distance\_m} is a
+relationship attribute and \texttt{proximity\_class} is derived from that distance.
+
+\subsection{Synthesis of the candidate ERM designs}
+The seven proposed diagrams contain three recurring alternatives. Table~\ref{tab:ermchoices}
+records the final decisions so that conceptual notation is not mixed with implementation
+details.
+
+\begin{table}[H]
+\centering
+\caption{Resolution of the candidate-model alternatives.}
+\label{tab:ermchoices}
+\begin{tabular}{p{0.25\textwidth}p{0.24\textwidth}p{0.43\textwidth}}
+\toprule
+Issue & Selected design & Reason \\
+\midrule
+Housing grain & One HDB\_FLAT entity at block-address grain & No unit number exists; type, storey and area vary by transaction. \\
+Block--hawker link & Direct M:N \emph{nearby} relationship & This is the lecture's conceptual representation; \texttt{distance\_m} is a relationship attribute. \\
+Association relation & Composite key (block, hawker) in the logical model & Prevents duplicate pairs without an unnecessary surrogate \texttt{proximity\_id}. \\
+Proximity class & Derived, not stored in each pair & Prevents distance and class from contradicting one another. \\
+Proximity levels & Logical reference relation & Centralizes the three interval definitions and supports controlled changes. \\
+Fresh market flag & Derived Boolean attribute & PostgreSQL generates it from the official market-stall count, preventing contradictory values. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\clearpage
+\begin{figure}[p]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+ entity/.style={draw=ntuBlue,very thick,fill=softBlue,rectangle,
+   align=center,minimum width=2.7cm,minimum height=0.9cm},
+ rel/.style={draw=black,thick,diamond,aspect=2.0,align=center,inner sep=1pt},
+ attr/.style={draw=black,ellipse,align=center,minimum height=0.65cm,font=\scriptsize},
+ derived/.style={attr,dashed}, edge/.style={thick},
+ every node/.style={font=\small}]
+\node[entity] (town) at (0,0) {TOWN};
+\node[rel] (contains) at (4,0) {contains};
+\node[entity] (block) at (8,0) {HDB\_FLAT\\[-1mm]{\scriptsize block-address record}};
+\node[rel] (records) at (12,0) {has\_sale};
+\node[entity] (trans) at (16,0) {RESALE\\TRANSACTION};
+\node[rel] (nearby) at (8,-4.0) {nearby};
+\node[entity] (hawker) at (8,-7.0) {HAWKER CENTRE};
+\node[attr] (townid) at (-1.3,1.45) {\underline{town\_id}};
+\node[attr] (townname) at (1.4,1.45) {town\_name};
+\node[attr] (blockid) at (5.1,2.2) {\underline{flat\_id}};
+\node[attr] (blockno) at (7.0,2.6) {block};
+\node[attr] (street) at (9.1,2.5) {street\_name};
+\node[attr] (postal) at (10.4,1.7) {postal\_code};
+\node[attr] (lat) at (5.8,-1.7) {latitude};
+\node[attr] (lon) at (8.1,-2.0) {longitude};
+\node[attr] (txid) at (12.8,2.7) {\underline{transaction\_id}};
+\node[attr] (sourcekey) at (15.2,3.0) {source\_row\_key};
+\node[attr] (month) at (17.6,2.7) {sale\_month};
+\node[attr] (type) at (19.0,1.8) {flat\_type};
+\node[attr] (storey) at (19.3,0.8) {storey\_range};
+\node[attr] (area) at (19.2,-0.4) {floor\_area\_sqm};
+\node[attr] (model) at (18.4,-1.6) {flat\_model};
+\node[attr] (leaseyear) at (17.2,-2.7) {lease\_commence\_year};
+\node[attr] (remaining) at (12.0,-2.7) {remaining\_lease\_months};
+\node[attr] (price) at (11.2,-1.6) {resale\_price};
+\node[attr] (hawkerid) at (3.5,-8.2) {\underline{hawker\_id}};
+\node[attr] (hawkername) at (5.2,-9.1) {hawker\_name};
+\node[attr] (hawkeraddress) at (7.1,-9.6) {address};
+\node[attr] (hawkerlat) at (9.0,-9.6) {latitude};
+\node[attr] (hawkerlon) at (10.9,-9.1) {longitude};
+\node[attr] (marketflag) at (12.6,-8.2) {has\_fresh\_market};
+\node[attr] (distance) at (4.8,-4.0) {distance\_m};
+\node[derived] (class) at (11.4,-4.0) {proximity\_class};
+\draw[edge] (town) -- node[above,pos=.22]{$(0,N)$} (contains);
+\draw[edge] (contains) -- node[above,pos=.78]{$(1,1)$} (block);
+\draw[edge] (block) -- node[above,pos=.22]{$(0,N)$} (records);
+\draw[edge] (records) -- node[above,pos=.78]{$(1,1)$} (trans);
+\draw[edge] (block) -- node[left,pos=.38]{$(0,N)$} (nearby);
+\draw[edge] (nearby) -- node[right,pos=.80]{$(0,N)$} (hawker);
+\foreach \a/\e in {townid/town,townname/town,blockid/block,blockno/block,street/block,
+ postal/block,lat/block,lon/block,txid/trans,sourcekey/trans,month/trans,type/trans,
+ storey/trans,area/trans,model/trans,leaseyear/trans,remaining/trans,price/trans,
+ hawkerid/hawker,hawkername/hawker,hawkeraddress/hawker,hawkerlat/hawker,hawkerlon/hawker,
+ marketflag/hawker,
+ distance/nearby,class/nearby}{\draw[edge] (\a) -- (\e);}
+\end{tikzpicture}}
+\caption{Final conceptual ER model. HDB\_FLAT is a block-address record; proximity class is derived.}
+\label{fig:er}
+\end{figure}
+\clearpage
+
+\subsection{Relational schema and normalization}
+\begin{longtable}{p{0.25\textwidth}p{0.67\textwidth}}
+\toprule
+Relation & Attributes and constraints \\
+\midrule
+\endhead
+Town & \textbf{town\_id} (PK), town\_name (UK, non-empty) \\
+HDBFlat & \textbf{flat\_id} (PK), town\_id (FK, NOT NULL), block, street\_name,
+postal\_code, latitude, longitude; UK(block, street\_name) \\
+ResaleTransaction & \textbf{transaction\_id} (PK), flat\_id (FK, NOT NULL), sale\_month,
+flat\_type, storey\_range, floor\_area\_sqm, flat\_model,
+lease\_commence\_year, remaining\_lease\_months, resale\_price, source\_row\_key (UK) \\
+HawkerCentre & \textbf{hawker\_id} (PK), hawker\_name (UK), address, latitude,
+longitude, market\_stall\_count, has\_fresh\_market (generated) \\
+ProximityLevel & \textbf{proximity\_level\_id} (PK), level\_name (UK), min\_distance\_m,
+max\_distance\_m, upper\_inclusive; interval overlap prohibited \\
+Nearby & \textbf{flat\_id, hawker\_id} (composite PK/FKs),
+distance\_m; relation produced by the M:N mapping \\
+\bottomrule
+\end{longtable}
+The 1:N \emph{contains} and \emph{has\_sale} relationships are mapped by NOT NULL foreign
+keys on their N-sides. Following the lecture mapping rule for M:N relationships
+\citep{ntu2026relational},
+\texttt{nearby} contains both participant keys as a composite primary key
+and the relationship attribute \texttt{distance\_m}. \texttt{ProximityLevel} is introduced
+at logical design time as a reference relation. The view
+\texttt{nearby\_classified} derives the matching level rather than storing a
+redundant \texttt{proximity\_level\_id} in every pair.
+
+For transactional correctness, the database makes the source-row hash unique, rejects
+non-positive prices and areas, constrains coordinates and lease values, cascades deletion
+only for derived flat--hawker links, and retains the default restrictive behavior for
+transaction history. PostgreSQL range exclusion prevents overlapping proximity-level
+definitions. During preparation, \texttt{has\_fresh\_market} is set from the official
+market-stall count; it remains \texttt{NULL} when no official match exists, preserving
+the distinction between ``no market'' and ``not matched''.
+
+Every non-key attribute describes its relation's key, the whole key, and no other
+non-key attribute. Town names, proximity definitions, and hawker facts are separated,
+eliminating update anomalies; the schema is in 3NF and, under the declared candidate keys,
+BCNF. Domain checks constrain Singapore coordinates, positive areas/prices, monthly dates,
+postal-code format, lease bounds, and distance bounds. Complete executable DDL appears in
+Appendix~\ref{app:ddl}.
+
+\section{Task 2: Data Acquisition and Population}
+\subsection{Sources and reproducibility}
+The download script retrieves the specified GitHub \texttt{hdb.csv} and the official HDB resale source,
+then retains transactions from 1 January 2023 through 31 December 2025,
+and the official hawker attribute table. The supplied
+\texttt{hawker\_geo.csv} provides hawker coordinates. The transformation program writes
+one CSV per database table and computes proximity links before PostgreSQL bulk loading.
+
+\begin{table}[H]\centering
+\caption{Input and processed dataset sizes.}
+\begin{tabular}{lrr}\toprule
+Dataset & Raw rows & Loaded/derived rows \\\midrule
+HDB resale transactions & 78,670 in scope & 78,670 \\
+HDB buildings & 12,442 & 9,385 participating blocks \\
+Hawker attributes & 107 & 104 postcode matches \\
+Hawker coordinates & 129 & 129 centres \\
+Block--hawker pairs & -- & 40,354 within 2 km \\
+\bottomrule\end{tabular}
+\end{table}
+
+\subsection{Transformations}
+Text keys are trimmed and upper-cased; sale months are converted to first-of-month dates;
+numeric fields are parsed into typed values; and source rows receive SHA-256 keys for
+idempotent loading. The early resale file lacks a remaining-lease field, so remaining
+months are computed as
+\[
+  99\times12 - \bigl(12(y_s-y_l)+(m_s-1)\bigr),
+\]
+where $(y_s,m_s)$ is the sale month and $y_l$ is the lease commencement year. Values are
+bounded to $[0,1188]$. Hawker attributes are joined to coordinates by six-digit postcode,
+which is more reliable than names containing abbreviations. The official market-produce
+stall count is retained, and PostgreSQL generates the fresh-market flag from it. Haversine
+distance is computed for every candidate block--hawker pair; links within 2 km are stored,
+while their bands are assigned only through the classification view.
+
+\subsection{Loading issues and resolutions}
+All 78,670 transactions in the specified 2023--2025 interval match a geocoded block;
+no in-scope transaction is excluded. Of 129 geolocated hawkers, 104 match official attributes by postcode;
+81 have market-produce stalls, 23 do not, and 25 remain unknown. Seventeen geolocation rows
+have blank addresses, represented as SQL \texttt{NULL}. PostgreSQL staging tables and
+foreign-key joins enforce load order; \texttt{ON CONFLICT} makes repeat runs safe.
+
+\input{tasks34}
+
+\section{Limitations and Conclusion}
+Straight-line distance ignores street networks, crossings, and public transport. Current
+HDB coordinates are a current reference snapshot rather than historical coordinates, and hawker matching leaves
+25 unknown market statuses. Prices are nominal rather than inflation-adjusted. Despite
+these limitations, the deliverable provides a normalized, constraint-rich, operational
+PostgreSQL backend and readable SQL for all required questions. Schema creation, five-file
+bulk loading, integrity checks, indexing, six analytical queries, and the controlled
+performance experiment have all been verified in PostgreSQL 18.
+
+\bibliographystyle{aaai-named}
+\bibliography{references}
+
+\appendix
+\section{Database Creation SQL}\label{app:ddl}
+\lstinputlisting{../sql/01_schema.sql}
+\section{Data Loading SQL}
+\lstinputlisting{../sql/02_load_data.sql}
+\section{Analytical Queries}\label{app:queries}
+\lstinputlisting{../sql/03_queries.sql}
+\section{Index Statements}\label{app:index}
+\lstinputlisting{../sql/04_indexes.sql}
+\section{Benchmark SQL}
+\lstinputlisting{../sql/05_benchmark.sql}
+\section{Reproducibility Commands}
+\begin{lstlisting}[language={}]
+powershell -File scripts/download_data.ps1
+python scripts/prepare_data.py
+psql -U postgres -f sql/00_create_database.sql
+psql -U postgres -d sd6103_housing -f sql/01_schema.sql
+psql -U postgres -d sd6103_housing -f sql/02_load_data.sql
+psql -U postgres -d sd6103_housing -f sql/03_queries.sql
+\end{lstlisting}
+
+\end{document}

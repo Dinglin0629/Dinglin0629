@@ -1,0 +1,19 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\BUDINGLIN\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/scripts",
+    "${workspaceFolder}/report"
+  ],
+  "files.associations": {
+    "*.sql": "sql",
+    "*.tex": "latex"
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.aux": true,
+    "**/*.blg": true,
+    "**/*.log": true,
+    "**/*.out": true,
+    "**/*.toc": true
+  }
+}
