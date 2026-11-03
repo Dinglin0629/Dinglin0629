@@ -247,6 +247,7 @@ The integration uses the teammate's six-relation lookup design and bulk-load app
 
 Independent pandas recomputation passes all six largest-data outputs: 52, 62, 30, 73, 11 and 154 groups. Every optional-index configuration produces the exact same complete output fingerprint as the S5 baseline. The common scope is 78,670 transactions and 36 months, with 40,354 stored and classified nearby links. The prior historical native timings and the uploaded 1997--1999 Q1 window are not reused as results for this instance.
 
+\iffalse
 \section{Task 4: Index Design and Experimental Evaluation}
 \subsection{Objective and controlled protocol}
 Task 4 selects indexes from actual EXPLAIN plans, runs each query five times on the largest Task 3 dataset, and compares indexed execution with that exact baseline. The deliverables include commented index DDL, raw observations, an Excel column chart, interpreted execution plans and reproducible scripts. This experiment uses 78,670 sales from January 2023 through December 2025; it does not mix the teammate's all-history population into the comparison.
@@ -353,6 +354,108 @@ The confirmed three-index bundle occupies 1.875 MiB and takes 162.57 ms of separ
 Annotated reproduction commands and dependency setup are in the package README. Both runners require an empty output folder. The native runner retains a fresh schema, repeats all trials, and selects indexes from native measurements. The macOS launcher supplies portable demo-database defaults.
 
 \textbf{Submission boundary.} The merged queries, independent result checks and scoped WASM experiment are complete. Confirm acceptance of the 2023--2025 partition protocol and alternative tool, or run the prescribed historical-file/native procedure. Genuine pgAdmin captures must come from the native run when required; supplied figures are labelled result exports.
+
+\fi
+\section{Task 4: Optimised Index Selection and Runtime Evaluation}
+\subsection{Selection basis and controlled protocol}
+Five Task 4 responses were reconciled before choosing the final index bundle. Results from the
+all-history database and the PGlite/WASM experiment are useful sensitivity checks, but the primary
+evidence is the native PostgreSQL 18.4 experiment that uses the same 78,670 transactions, January
+2023--December 2025 scope, schema and Q1--Q6 definitions as Tasks 1--3. Each condition received
+one excluded warm-up and five measured executions; all complete outputs were equal before and
+after index creation. The metric is server execution time from \texttt{EXPLAIN (ANALYZE,
+TIMING OFF)}. No scan type was forced.
+
+The selection rule retains an index only when it supplies a required filter, join or order and its
+benefit is visible in an actual plan or in a statistically clear bundle effect. It rejects duplicate
+indexes and indexes that merely classify every row. On this basis the final solution contains four
+indexes and deliberately excludes an index on \texttt{remaining\_lease\_months}.
+
+\subsection{Final four-index solution}
+\lstinputlisting{../sql/04_indexes.sql}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{p{0.25\linewidth}p{0.13\linewidth}p{0.52\linewidth}}
+\toprule
+Index & Target & Plan-level purpose \\
+\midrule
+\texttt{idx\_rt\_type\_month} & Q1, Q3 & Type-led filtering plus a month range; included columns permit narrow index-only access for price/area calculations. \\
+\texttt{idx\_rt\_flat} & Q4--Q6 & Fetch transactions by the flat foreign key; cooperates with the reverse nearby index in Q6. \\
+\texttt{idx\_nearby\_flat\_dist} & Q4 & Provides \texttt{(flat\_id,distance\_m,hawker\_id)} order for deterministic nearest-centre selection. \\
+\texttt{idx\_nearby\_hawker} & Q6 & Provides the reverse M:N access path; together with \texttt{idx\_rt\_flat}, removes Q6's spilling sort. \\
+\bottomrule
+\end{tabular}
+\caption{Final indexes and the operators they are intended to change.}
+\end{table}
+
+The four indexes occupy 9.27 MiB in the measured instance. This is a deliberate read-performance
+trade-off: future inserts must maintain four additional structures, so indexes without demonstrated
+benefit are not retained.
+
+\subsection{Measured results on the matching 2023--2025 database}
+\begin{table}[H]\centering\small
+\begin{tabular}{lrrrrr}
+\toprule
+Query & Base mean & Base SD & Index mean & Index SD & Reduction \% \\
+\midrule
+Q1 & 28.83 & 0.49 & 22.13 & 0.07 & 23.24 \\
+Q2 & 75.11 & 5.02 & 76.92 & 16.70 & -2.41 \\
+Q3 & 21.42 & 6.43 & 9.08 & 0.93 & 57.64 \\
+Q4 & 36.74 & 0.86 & 30.50 & 5.19 & 16.98 \\
+Q5 & 236.08 & 38.88 & 220.29 & 10.17 & 6.69 \\
+Q6 & 992.47 & 22.35 & 480.42 & 7.14 & 51.59 \\
+\bottomrule
+\end{tabular}
+\caption{Native PostgreSQL mean execution time and sample SD in milliseconds; five repetitions per condition.}
+\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.96\linewidth]{generated/task4_optimised_chart.png}
+\caption{Native PostgreSQL baseline versus the optimised four-index bundle. The source chart reports the mean and one sample standard deviation for five runs per condition.}
+\label{fig:task4opt}
+\end{figure}
+
+The sum of the six means falls from 1,390.65 ms to 839.34 ms, a 39.64\% workload reduction.
+This aggregate is driven by large, repeatable gains in Q3 and Q6 rather than by treating every
+small timing difference as meaningful.
+
+\subsection{Per-query interpretation}
+\textbf{Q1.} The type/month covering index reduces execution time by 23.24\%. Since the stored
+database itself contains only 2023--2025, the date predicate covers the full table; the measured
+gain comes from the flat-type predicate and the narrower covering structure. A longer history
+would make the month range additionally selective.
+
+\textbf{Q2.} The 2.41\% slowdown is within run-to-run noise. Q2 applies a CASE classification and
+median calculation to every transaction, so a single-column lease index cannot eliminate rows.
+Consequently \texttt{remaining\_lease\_months} is not indexed.
+
+\textbf{Q3.} Both 3 ROOM scans switch from a full-table path to the covering type/month index.
+The mean falls by 57.64\%, the largest proportional improvement.
+
+\textbf{Q4.} Ordering nearby rows by flat, distance and hawker ID removes the sort before
+\texttt{DISTINCT ON}. The 16.98\% reduction is useful but smaller than Q1/Q3 because the
+transaction join remains.
+
+\textbf{Q5.} Its 6.69\% reduction is not larger than the observed timing noise. The dominant work
+is membership de-duplication and grouping, so no additional Q5-specific index is claimed.
+
+\textbf{Q6.} The reverse nearby path and flat-led transaction lookup must be used together. They
+change the join order and eliminate the approximately 16.3 MiB external sort observed in the
+baseline. Mean runtime falls from 992.47 to 480.42 ms, a 51.59\% reduction. Separate trials found
+that the flat index alone saved only about 14\%, while the reverse nearby index alone was unused;
+the interaction is therefore part of the final design.
+
+\subsection{Alternatives rejected}
+The former three-index bundle is not retained. Its lease index is unused by Q2, and its simple
+month/type definition omits covering columns and uses the weaker leading-column order for this
+scoped database. Partial 3 ROOM and 4/5 ROOM indexes remain reasonable future candidates, but
+their current-dataset isolated tests did not outperform the confirmed native four-index bundle.
+Likewise, full-history runtimes are not mixed with the 2023--2025 measurements because their
+selectivity, row counts and dominant operators differ.
+
+The delivered \texttt{sql/04\_indexes.sql} is therefore the final operational answer: retain the four
+indexes shown above; do not create a lease index; and run equal \texttt{VACUUM (ANALYZE)}
+maintenance before any new baseline/index comparison.
 
 \subsection{References and provenance}
 PostgreSQL 18 documentation: \url{https://www.postgresql.org/docs/18/sql-explain.html}; index-only scans, \url{https://www.postgresql.org/docs/18/indexes-index-only-scans.html}; partial indexes, \url{https://www.postgresql.org/docs/18/indexes-partial.html}.
